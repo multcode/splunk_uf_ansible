@@ -1,0 +1,114 @@
+---
+
+- name: Beginning Playbook message
+  debug:
+          msg: "Beginning the splunk_forwarder_uf role Install Inputs playbook "
+  
+- name: Log execution of the install_inputs.yml playbook
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Beginning
+  changed_when: "False"
+  check_mode: no   
+
+- name: Check for /opt/splunkforwarder/etc/apps/search/local directory
+  stat:
+     path: /opt/splunkforwarder/etc/apps/search/local
+  register: dir_check
+  changed_when: dir_check.stat.exists == false
+  
+- name: Log Check for /opt/splunkforwarder/etc/apps/search/local directory failure
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Check for /opt/splunkforwarder/etc/apps/search/local failure"
+  changed_when: "False"
+  check_mode: no   
+  when: dir_check.stat.exists == False
+  
+- name: Create local inputs directory 
+  file:
+    path: /opt/splunkforwarder/etc/apps/search/local
+    owner: splunk
+    group: splunk 
+    state: directory
+  become: yes
+  register: create_dir
+  when: (dir_check.stat.exists == False) and (ansible_check_mode == false)
+  
+- name: Log Create local inputs directory
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed local inputs directory"
+  changed_when: "False"
+  check_mode: no 
+  when: create_dir.changed == true
+
+- name: Check for inputs file
+  stat:
+     path: /opt/splunkforwarder/etc/apps/search/local/inputs.conf
+  register: inputs_check
+  changed_when: inputs_check.stat.exists == false
+  when: (dir_check.stat.exists == true) or (create_dir.changed == true)
+  
+- name: Log Check for inputs file failure
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Check for inputs file failure"
+  changed_when: "False"
+  check_mode: no   
+  when: inputs_check.stat.exists == False
+
+- name: Copy standard inputs config file to splunk directory
+  copy: 
+    src: inputs.conf
+    dest: /opt/splunkforwarder/etc/apps/search/local/inputs.conf
+  changed_when: "False"
+  register: inputs_copy_temp
+  when: (inputs_check.stat.exists == False) and (ansible_check_mode == false)
+  
+- name: Log copy of inputs file
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed inputs file"
+  changed_when: "False"
+  check_mode: no   
+  when: (inputs_copy_temp.changed == true)
+  
+- name: Copy standard inputs config file to static_files directory
+  copy: 
+    src: inputs.conf
+    dest: /home/remoteuser/static_files/inputs.conf
+  changed_when: "False"
+  check_mode: no
+
+- name: Get difference between standard & installed inputs file
+  command: diff /home/remoteuser/static_files/inputs.conf /opt/splunkforwarder/etc/apps/search/local/inputs.conf
+  register: input_difference
+  failed_when: input_difference.rc > 1
+  changed_when: input_difference.rc == 1
+  check_mode: no 
+  
+- name: Log inputs config mismatch
+  local_action: command logger ansible-track playbook:linux_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"inputs config file mismatch"
+  changed_when: "False"
+  check_mode: no 
+  when: input_difference.rc == 1
+  
+- name: Copy standard inputs config file to splunk directory
+  copy: 
+    src: inputs.conf
+    dest: /opt/splunkforwarder/etc/apps/search/local/inputs.conf
+  changed_when: "False"
+  register: inputs_copy_temp
+  when: (input_difference.rc == 1) and (ansible_check_mode == false)
+  
+- name: Log Copy standard inputs config file to splunk directory
+  local_action: command logger ansible-track playbook:linux_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed inputs config file to splunk directory"
+  changed_when: "False"
+  check_mode: no 
+  when: (inputs_copy_temp.changed == true) and (ansible_check_mode == false)
+  
+- name: Restart the Forwarder service
+  command: /sbin/runuser -l splunk /etc/init.d/splunk restart 
+  become: yes
+  when: ansible_check_mode == false
+  register: splunk_restart_results
+  
+- name: Log forwarder restart
+  local_action: command logger ansible-track playbook:install_inputs.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Restarted  message:"Restarted Forwarder service"
+  changed_when: "False"
+  check_mode: no   
+  when: (splunk_restart_results.changed == True) and (ansible_check_mode == false)
+      
+
+...

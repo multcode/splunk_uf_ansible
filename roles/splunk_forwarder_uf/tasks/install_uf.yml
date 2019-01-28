@@ -1,0 +1,145 @@
+---
+
+- name: Beginning Playbook message
+  debug:
+          msg: "Beginning the splunk_forwarder_uf role Install UF playbook "
+  
+- name: Log execution of the install_uf.yml playbook
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Beginning
+  changed_when: "False"
+  check_mode: no   
+  
+          
+- name: Check for source DEB file on client
+  stat:
+      path: /home/remoteuser/static_files/replace_me.deb
+  changed_when: stat_result.stat.exists == false
+  register: stat_result
+  
+- name: Log for source DEB file on client failure
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Source DEB file missing"
+  changed_when: "False"
+  check_mode: no   
+  when: stat_result.stat.exists == False
+  
+- name: Copy source file
+  copy:
+        src: replace_me.deb
+        dest: /home/remoteuser/static_files
+  register: copy_source_file
+  when: (stat_result.stat.exists == False) and (ansible_check_mode == false)
+  
+- name: Log copy source file
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Source file copied"
+  changed_when: "False"
+  check_mode: no   
+  when: copy_source_file.changed == True
+  
+- name: Check for Universal Forwarder already installed
+  stat:
+          path: /opt/splunkforwarder
+  changed_when: uf_install_check.stat.exists == false
+  register: uf_install_check
+  
+- name: Log UF Install check failure
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Universal Forwarder not installed"
+  changed_when: "False"
+  check_mode: no   
+  when: uf_install_check.stat.exists == False
+    
+  
+- name: Install deb package for Universal Forwarder
+  apt:
+          deb: /home/remoteuser/static_files/splunkforwarder-7.2.0-8c86330ac18-linux-2.6-amd64.deb
+  become: yes
+  when: (uf_install_check.stat.exists == False) and (ansible_check_mode == false)
+  register: install_forwarder_result
+  
+- name: Log UF Install
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed Universal Forwarder DEB"
+  changed_when: "False"
+  check_mode: no   
+  when: install_forwarder_result.changed == True
+  
+- name: Copy User Seed file
+  copy:
+        src: user-seed.conf
+        dest: /opt/splunkforwarder/etc/system/local
+  become: yes
+  register: user_seed_file_copy
+  when: ansible_check_mode == false
+  
+- name: Log user seed file install
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed user seed file"
+  changed_when: "False"
+  check_mode: no   
+  when: (user_seed_file_copy.changed == True) and (ansible_check_mode == false)  
+  
+- name: Check for init script
+  stat:
+          path: /etc/init.d/splunk
+  register: boot_start_check_result
+  changed_when: boot_start_check_result.stat.exists == False
+
+- name: Log init script check failure
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"init script not installed"
+  changed_when: "False"
+  check_mode: no   
+  when: boot_start_check_result.stat.exists == False  
+  
+- name: Enable boot start
+  shell: /opt/splunkforwarder/bin/splunk enable boot-start --accept-license --no-prompt --answer-yes
+  become: yes
+  when: (boot_start_check_result.stat.exists == False) and (ansible_check_mode == false)
+  register: boot_start_result   
+  
+- name: Log enable splunk boot start
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed splunk boot start"
+  changed_when: "False"
+  check_mode: no   
+  when: (boot_start_result.changed == True) and (ansible_check_mode == false)
+
+- name: Change ownership on init script
+  file:  
+     path: /etc/init.d/splunk
+     owner: splunk
+     group: splunk
+     mode: 0777
+  become: yes
+  register: boot_start_permissions
+  when: ansible_check_mode == false
+  
+- name: Log Change ownership on init script
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed init script permissions"
+  changed_when: "False"
+  check_mode: no   
+  when: (boot_start_permissions.changed == True) and (ansible_check_mode == false)
+    
+  
+- name: Give splunk user write permissions to /opt/spkunkforwarder  
+  file: 
+     path: /opt/splunkforwarder
+     mode: 0777
+     recurse: yes
+  become: yes
+  when: ansible_check_mode == false
+  register: splunk_users_permissions
+  
+- name: Log Change splunk user permissions to app directory
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed splunk user write permissions"
+  changed_when: "False"
+  check_mode: no   
+  when: (splunk_users_permissions.changed == True) and (ansible_check_mode == false)
+      
+- name: Restart the Forwarder service
+  command: /sbin/runuser -l splunk /etc/init.d/splunk restart 
+  become: yes
+  when: ansible_check_mode == false
+  register: splunk_restart_results
+  
+- name: Log forwarder restart
+  local_action: command logger ansible-track playbook:install_uf.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Restarted  message:"Restarted Forwarder service"
+  changed_when: "False"
+  check_mode: no   
+  when: (splunk_restart_results.changed == True) and (ansible_check_mode == false)
+      

@@ -1,0 +1,75 @@
+---
+# tasks file for creating splunk user
+#
+- name: Beginning Playbook message
+  debug:
+          msg: Beginning the splunk forwarder role Create Splunk User playbook
+
+- name: Log execution of the create_splunk_user.yml playbook
+  local_action: command logger ansible-track playbook:create_splunk_user.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Beginning
+  changed_when: "False"
+  check_mode: no 
+
+- name: Check for user home directory
+  command: ls /home/splunk
+  register: dircheck_result
+  changed_when: dircheck_result.rc == 2
+  check_mode: no
+  ignore_errors: yes
+  
+- name: Log home directory check failure
+  local_action: command logger ansible-track playbook:create_splunk_user.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Failed splunk home directory check"
+  changed_when: "False"
+  check_mode: no 
+  when: dircheck_result.rc > 0
+
+- name: Add the user 'splunk' 
+  user:
+    name: splunk
+    comment: splunk
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+  become: yes
+  when: ansible_check_mode == false
+  register: user_add
+  
+- name: Log splunk user add
+  local_action: command logger ansible-track playbook:create_splunk_user.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed splunk user"
+  changed_when: "False"
+  check_mode: no   
+  when: user_add.changed == true
+
+- name: Check for Sudo config
+  command: grep ^splunk /etc/sudoers
+  register: sudo_check_result
+  when: ansible_check_mode == true
+  changed_when: "False"
+  check_mode: no
+  ignore_errors: yes
+  
+- name: Log splunk sudo config check
+  local_action: command logger ansible-track playbook:create_splunk_user.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:Failed sudo config check
+  changed_when: "False"
+  check_mode: no 
+  ignore_errors: yes
+  when: sudo_check_result.rc > 0
+  
+- name: Customize Sudo config
+  lineinfile:
+    path: /etc/sudoers
+    regexp: 'splunk'
+    line: 'splunk ALL=NOPASSWD: ALL'
+    state: present
+  become: yes
+  register: custom_sudo_config
+  when: ansible_check_mode == false
+  
+- name: Log splunk sudo config
+  local_action: command logger ansible-track playbook:create_splunk_user.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:Installed sudo config
+  changed_when: "False"
+  check_mode: no 
+  ignore_errors: yes
+  when: custom_sudo_config.changed == true
+
+...

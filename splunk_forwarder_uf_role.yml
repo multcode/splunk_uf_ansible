@@ -1,0 +1,9 @@
+---
+- name: Role "splunk_forwarder_uf" Apply Playbook
+  hosts: 
+    - splunk_forwarder_uf
+  roles:
+     - ./roles/splunk_forwarder_uf
+  vars:
+     just_check: false
+...

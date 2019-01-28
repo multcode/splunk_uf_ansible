@@ -1,0 +1,81 @@
+---
+
+- name: Beginning Playbook message
+  debug:
+          msg: "Beginning the splunk_forwarder_uf role Install UF Credentials playbook "
+
+  
+- name: Log execution of the install_uf_creds.yml playbook
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Beginning
+  changed_when: "False"
+  check_mode: no   
+  
+
+- name: Check for credentials file on client
+  stat:
+          path: /home/remoteuser/static_files/splunkclouduf.spl
+  register: cred_file_check_result
+  changed_when: cred_file_check_result.stat.exists == False
+  
+- name: Log creds file check failure
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"Check UF creds file failure"
+  changed_when: "False"
+  check_mode: no   
+  when: cred_file_check_result.stat.exists == False
+  
+- name: Copy credentials installer
+  copy:
+        src: splunkclouduf.spl
+        dest: /home/remoteuser/static_files
+  when: ansible_check_mode == false
+  register: copy_creds_installer
+  
+- name: Log copy credentails installer
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed credentials installer"
+  changed_when: "False"
+  check_mode: no   
+  when: (copy_creds_installer.changed == True) and (ansible_check_mode == false)
+    
+  
+- name: Check for credentials installed
+  stat:
+          path: /opt/splunkforwarder/etc/apps/100_multnomah_splunkcloud
+  register: cred_install_check_result
+  changed_when: cred_install_check_result.stat.exists == False
+  
+- name: Log check credentails installed failure
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Failure  message:"credentials not installed"
+  changed_when: "False"
+  check_mode: no   
+  when: cred_install_check_result.stat.exists == False
+    
+  
+- name: Install Splunk creds
+  command: su - splunk -c  '/opt/splunkforwarder/bin/splunk install app /home/remoteuser/static_files/splunkclouduf.spl -auth admin:"{{ splunk_admin_passwd }}"'
+  become: yes
+  register: install_creds_result
+  ignore_errors: yes
+  when: ansible_check_mode == false
+
+
+- name: Log install credentails
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Installed  message:"Installed credentials"
+  changed_when: "False"
+  check_mode: no   
+  when: install_creds_result.changed == true
+      
+  
+
+- name: Restart the Forwarder service
+  command: /sbin/runuser -l splunk /etc/init.d/splunk restart 
+  register: splunk_restart_results
+  become: yes  
+  when: (install_creds_result.changed == True) and (ansible_check_mode == false)
+               
+- name: Log forwarder restart
+  local_action: command logger ansible-track playbook:install_uf_creds.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Restarted  message:"Restarted splunk forwarder"
+  changed_when: "False"
+  check_mode: no 
+  when: (install_creds_result.changed == True) and (ansible_check_mode == false)
+          
+...

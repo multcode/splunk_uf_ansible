@@ -1,0 +1,10 @@
+---
+- name: Role "splunk_forwarder" Check Playbook
+  hosts: 
+    - splunk_forwarder
+    
+  
+  roles:
+     - ./roles/splunk_forwarder
+ 
+...

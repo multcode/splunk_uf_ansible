@@ -1,0 +1,26 @@
+---
+# tasks file for splunk_forwarder_uf
+#
+- name: Beginning Playbook message
+  debug:
+          msg: Beginning the main splunk_forwarder_uf role playbook
+  
+- name: Log execution of the splunk_forwarder_uf role main playbook
+  local_action: command logger ansible-track playbook:main.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Beginning
+  changed_when: "False"
+  check_mode: no   
+          
+- import_tasks: install_uf.yml
+
+- import_tasks: install_uf_creds.yml
+
+- import_tasks: install_inputs.yml
+
+- import_tasks: check_uf.yml
+
+- name: Log conclusion of the splunk forwarder role main playbook
+  local_action: command logger ansible-track playbook:main.yml target:"{{ inventory_hostname }}" check_mode:"{{ ansible_check_mode }}" roles:{{ role_names }} message_type:Ending
+  changed_when: "False"
+  check_mode: no   
+
+...
